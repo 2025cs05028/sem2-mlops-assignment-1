@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "random_state": 42,
+  "classifier_name": "LogisticRegression",
+  "classifier_params": {
+    "C": 0.2848035868435802
+  }
+}

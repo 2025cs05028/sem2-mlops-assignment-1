@@ -1,0 +1,8 @@
+mlruns/
+models/heart_disease_production_mlflow/
+__pycache__/
+*.pyc
+.Python
+.venv/
+venv/
+.env
