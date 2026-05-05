@@ -2,22 +2,6 @@ name: Manual E2E Pipeline
 
 on:
   workflow_dispatch:
-    inputs:
-      skip_training:
-        description: "Skip baseline modelTraining.py stage"
-        required: false
-        default: false
-        type: boolean
-      with_tests:
-        description: "Run pytest suite at the end"
-        required: false
-        default: true
-        type: boolean
-      verbose:
-        description: "Show full logs from each stage"
-        required: false
-        default: false
-        type: boolean
 
 jobs:
   run-e2e:
@@ -40,24 +24,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build run_pipeline flags
-        id: flags
-        shell: bash
-        run: |
-          FLAGS=""
-          if [[ "${{ inputs.skip_training }}" == "true" ]]; then
-            FLAGS="$FLAGS --skip-training"
-          fi
-          if [[ "${{ inputs.with_tests }}" == "true" ]]; then
-            FLAGS="$FLAGS --with-tests"
-          fi
-          if [[ "${{ inputs.verbose }}" == "true" ]]; then
-            FLAGS="$FLAGS --verbose"
-          fi
-          echo "flags=$FLAGS" >> "$GITHUB_OUTPUT"
-
       - name: Run full pipeline
-        run: python run_pipeline.py ${{ steps.flags.outputs.flags }}
+        run: python run_pipeline.py
 
       - name: Upload pipeline artifacts
         if: always()
