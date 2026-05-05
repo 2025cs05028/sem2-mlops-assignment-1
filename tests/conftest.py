@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from heart_preprocessing import CATEGORICAL, NUMERIC_CONT, TARGET
+from heart_preprocessing import CATEGORICAL, TARGET
 
 
 @pytest.fixture

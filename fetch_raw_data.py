@@ -45,7 +45,6 @@ def main() -> None:
         import matplotlib
 
         matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
         import mlflow
 
         from mlflow_tracking import init_mlflow, log_bar_chart_png

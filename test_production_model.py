@@ -9,16 +9,7 @@ Then predicts for one sample patient using raw feature columns.
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
-
-try:
-    from urllib3.exceptions import NotOpenSSLWarning
-
-    warnings.filterwarnings("ignore", category=NotOpenSSLWarning)
-except Exception:
-    pass
-warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
 
 import mlflow.sklearn
 import pandas as pd
