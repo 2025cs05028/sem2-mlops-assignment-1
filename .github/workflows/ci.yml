@@ -274,7 +274,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Show S3 destination (MLflow model directory)
+      - name: Show S3 destination (model.pkl)
         shell: bash
         env:
           # Prefer Variables tab; fall back to Secrets if you stored these as secrets
@@ -282,14 +282,13 @@ jobs:
           S3_MODEL_KEY: ${{ vars.S3_MODEL_KEY || secrets.S3_MODEL_KEY }}
         run: |
           KEY="${S3_MODEL_KEY:-heart-disease/production/model.pkl}"
-          PREFIX="$(dirname "${KEY}")"
           if [[ -n "${S3_MODEL_BUCKET}" ]]; then
-            echo "::notice title=S3 upload::Will sync models/heart_disease_production_mlflow/* → s3://${S3_MODEL_BUCKET}/${PREFIX}/"
+            echo "::notice title=S3 upload::Will copy models/heart_disease_production_mlflow/model.pkl → s3://${S3_MODEL_BUCKET}/${KEY}"
           else
             echo "::notice title=S3 upload::S3_MODEL_BUCKET not set — packaging runs but S3 copy is skipped."
           fi
 
-      - name: Package model and upload MLflow directory to S3
+      - name: Package model and upload model.pkl to S3
         env:
           S3_MODEL_BUCKET: ${{ vars.S3_MODEL_BUCKET || secrets.S3_MODEL_BUCKET }}
           S3_MODEL_KEY: ${{ vars.S3_MODEL_KEY || secrets.S3_MODEL_KEY }}
@@ -306,6 +305,6 @@ jobs:
           name: ci-packaged-model-and-mlruns
           path: |
             outputs/**
-            models/**
+            models/heart_disease_production_mlflow/model.pkl
             mlruns/**
           if-no-files-found: warn
