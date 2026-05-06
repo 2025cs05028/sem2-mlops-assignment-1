@@ -130,9 +130,15 @@ def main() -> None:
     if s3_uri:
         print(f"Uploaded model.pkl to: {s3_uri}")
     elif os.environ.get("S3_MODEL_BUCKET", "").strip():
-        print("S3_MODEL_BUCKET is set but upload did not run (missing model.pkl?).")
+        print(
+            "S3_MODEL_BUCKET is set but upload did not run "
+            "(check that models/heart_disease_production_mlflow/model.pkl exists)."
+        )
     else:
-        print("S3 upload skipped (set S3_MODEL_BUCKET and AWS credentials to enable).")
+        print(
+            "S3 upload skipped: set env S3_MODEL_BUCKET (and AWS credentials / region) "
+            "or GitHub Actions variables + secrets — see .github/workflows."
+        )
 
 
 if __name__ == "__main__":
