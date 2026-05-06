@@ -35,6 +35,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+try:
+    from botocore.exceptions import BotoCoreError, ClientError
+except ImportError:  # pragma: no cover - boto3 normally bundles botocore
+    class _S3UploadError(Exception):
+        """Placeholder when botocore is unavailable."""
+
+    BotoCoreError = ClientError = _S3UploadError
+
 
 def _s3_client():
     try:
@@ -78,7 +86,6 @@ def upload_mlflow_sklearn_directory_if_configured(local_dir: Path) -> str | None
         extra_args["ServerSideEncryption"] = "AES256"
 
     client = _s3_client()
-    from botocore.exceptions import BotoCoreError, ClientError
 
     try:
         for path in sorted(local_dir.rglob("*")):

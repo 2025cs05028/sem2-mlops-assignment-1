@@ -28,11 +28,9 @@ from pathlib import Path
 import mlflow.sklearn
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
 from heart_preprocessing import FEATURE_COLS
+
+ROOT = Path(__file__).resolve().parent
 
 _model = None
 
@@ -57,25 +55,23 @@ def resolve_model_uri(cli_path: str | None = None) -> str:
 
 
 def sample_patient() -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "age": 63,
-                "sex": 1,
-                "cp": 3,
-                "trestbps": 145,
-                "chol": 233,
-                "fbs": 1,
-                "restecg": 0,
-                "thalach": 150,
-                "exang": 0,
-                "oldpeak": 2.3,
-                "slope": 0,
-                "ca": 0,
-                "thal": "?",
-            }
-        ]
-    )
+    """One demo row; column order matches ``FEATURE_COLS`` (training parity)."""
+    raw = {
+        "age": 63,
+        "trestbps": 145,
+        "chol": 233,
+        "thalach": 150,
+        "oldpeak": 2.3,
+        "sex": 1,
+        "cp": 3,
+        "fbs": 1,
+        "restecg": 0,
+        "exang": 0,
+        "slope": 0,
+        "ca": 0,
+        "thal": "?",
+    }
+    return pd.DataFrame([[raw[c] for c in FEATURE_COLS]], columns=FEATURE_COLS)
 
 
 def get_model(uri: str | None = None):
@@ -98,7 +94,8 @@ def run_once(uri: str | None = None) -> None:
     print(f"P(class=1): {proba:.2%}")
 
 
-def _serve() -> None:
+def create_flask_app():
+    """Return the Flask app (for ``predict_app.py serve`` and for tests)."""
     from flask import Flask, jsonify, request
 
     app = Flask(__name__)
@@ -131,6 +128,11 @@ def _serve() -> None:
         probas = [float(p) for p in model.predict_proba(X)[:, 1].tolist()]
         return jsonify({"predictions": preds, "proba_class_1": probas})
 
+    return app
+
+
+def _serve() -> None:
+    app = create_flask_app()
     get_model()
     host = os.environ.get("BIND_HOST", "0.0.0.0").strip()
     port = int(os.environ.get("PORT", "8080"))
