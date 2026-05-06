@@ -279,8 +279,8 @@ jobs:
       - name: Show S3 destination (model.pkl)
         shell: bash
         env:
-          S3_MODEL_BUCKET: ${{ vars.S3_MODEL_BUCKET }}
-          S3_MODEL_KEY: ${{ vars.S3_MODEL_KEY }}
+          S3_MODEL_BUCKET: ${{ vars.S3_MODEL_BUCKET || secrets.S3_MODEL_BUCKET }}
+          S3_MODEL_KEY: ${{ vars.S3_MODEL_KEY || secrets.S3_MODEL_KEY }}
         run: |
           KEY="${S3_MODEL_KEY:-heart-disease/production/model.pkl}"
           if [[ -n "${S3_MODEL_BUCKET}" ]]; then
@@ -291,10 +291,10 @@ jobs:
 
       - name: Package model and upload model.pkl to S3
         env:
-          S3_MODEL_BUCKET: ${{ vars.S3_MODEL_BUCKET }}
-          S3_MODEL_KEY: ${{ vars.S3_MODEL_KEY }}
-          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
-          S3_SSE: ${{ vars.S3_SSE }}
+          S3_MODEL_BUCKET: ${{ vars.S3_MODEL_BUCKET || secrets.S3_MODEL_BUCKET }}
+          S3_MODEL_KEY: ${{ vars.S3_MODEL_KEY || secrets.S3_MODEL_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION || secrets.AWS_DEFAULT_REGION }}
+          S3_SSE: ${{ vars.S3_SSE || secrets.S3_SSE }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: python package_production_model.py
