@@ -17,6 +17,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -27,6 +28,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import Pipeline
 
 from heart_preprocessing import FEATURE_COLS, build_feature_preprocessor, load_clean_dataframe
+from s3_model_upload import upload_production_model_pkl_if_configured
 
 ROOT = Path(__file__).resolve().parent
 REQUIREMENTS_PATH = ROOT / "requirements.txt"
@@ -100,6 +102,7 @@ def main() -> None:
         input_example=example,
     )
 
+    s3_uri: str | None = None
     with mlflow.start_run(run_name="package_production_pipeline"):
         mlflow.set_tag("pipeline_stage", "packaging")
         mlflow.log_param("python", sys.version.split()[0])
@@ -116,9 +119,20 @@ def main() -> None:
             input_example=example,
         )
 
+        model_pkl = LOCAL_MODEL_DIR / "model.pkl"
+        s3_uri = upload_production_model_pkl_if_configured(model_pkl)
+        if s3_uri:
+            mlflow.log_param("s3_model_uri", s3_uri)
+
     print(f"Train ROC-AUC (full data, in-sample): {train_auc:.4f}")
     print(f"Saved MLflow sklearn model: {LOCAL_MODEL_DIR}")
     print("Logged run to experiment hd-06-model-packaging")
+    if s3_uri:
+        print(f"Uploaded model.pkl to: {s3_uri}")
+    elif os.environ.get("S3_MODEL_BUCKET", "").strip():
+        print("S3_MODEL_BUCKET is set but upload did not run (missing model.pkl?).")
+    else:
+        print("S3 upload skipped (set S3_MODEL_BUCKET and AWS credentials to enable).")
 
 
 if __name__ == "__main__":

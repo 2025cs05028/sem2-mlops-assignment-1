@@ -52,10 +52,11 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -q
 
-  model-training:
-    name: Model Training Pipeline
+  fetch-raw:
+    name: Fetch Raw Data
     runs-on: ubuntu-latest
     needs: unit-tests
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,12 +72,122 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run training stages
+      - name: Run fetch stage
+        run: python fetch_raw_data.py
+
+      - name: Upload raw data artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-data
+          path: data/heart_disease.csv
+          if-no-files-found: error
+
+  cleaning:
+    name: Data Cleaning + EDA
+    runs-on: ubuntu-latest
+    needs: fetch-raw
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download raw data artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: raw-data
+          path: .
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
         run: |
-          python fetch_raw_data.py
-          python dataCleaning.py
-          python featureEngineering.py
-          python modelTraining.py
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run cleaning stage
+        run: python dataCleaning.py
+
+      - name: Upload cleaning artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleaning-data
+          path: |
+            data/heart_disease_clean.csv
+            data/heart_disease_encoded.csv
+            outputs/eda/**
+          if-no-files-found: error
+
+  feature-engineering:
+    name: Feature Engineering
+    runs-on: ubuntu-latest
+    needs: cleaning
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download cleaning artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cleaning-data
+          path: .
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run feature stage
+        run: python featureEngineering.py
+
+      - name: Upload feature artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: features-data
+          path: |
+            data/ml_X.csv
+            data/ml_y.csv
+            data/heart_disease_clean.csv
+          if-no-files-found: error
+
+  model-training:
+    name: Model Training
+    runs-on: ubuntu-latest
+    needs: feature-engineering
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download feature artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: features-data
+          path: .
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run model training stage
+        run: python modelTraining.py
 
       - name: Upload training artifacts
         if: always()
@@ -84,8 +195,115 @@ jobs:
         with:
           name: training-artifacts
           path: |
+            models/*.joblib
             outputs/model_training_cv.md
             outputs/model_training_cv.csv
             outputs/holdout_summary.csv
-            models/*.joblib
+          if-no-files-found: warn
+
+  model-selection:
+    name: Model Selection
+    runs-on: ubuntu-latest
+    needs: model-training
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download feature artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: features-data
+          path: .
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run model selection stage
+        run: python modelSelection.py
+
+      - name: Upload selection artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selection-artifacts
+          path: |
+            outputs/model_selection_report.md
+            outputs/model_selection_cv_summary.csv
+            outputs/model_selection_holdout.csv
+            outputs/production_model_config.json
+          if-no-files-found: warn
+
+  model-packaging-s3:
+    name: Model packaging — copy model.pkl to S3
+    runs-on: ubuntu-latest
+    needs: model-selection
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download feature artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: features-data
+          path: .
+
+      - name: Download selection artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: selection-artifacts
+          path: .
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Show S3 destination (model.pkl)
+        shell: bash
+        env:
+          S3_MODEL_BUCKET: ${{ vars.S3_MODEL_BUCKET }}
+          S3_MODEL_KEY: ${{ vars.S3_MODEL_KEY }}
+        run: |
+          KEY="${S3_MODEL_KEY:-heart-disease/production/model.pkl}"
+          if [[ -n "${S3_MODEL_BUCKET}" ]]; then
+            echo "::notice title=S3 upload::Will copy models/heart_disease_production_mlflow/model.pkl → s3://${S3_MODEL_BUCKET}/${KEY}"
+          else
+            echo "::notice title=S3 upload::S3_MODEL_BUCKET not set — packaging runs but S3 copy is skipped."
+          fi
+
+      - name: Package model and upload model.pkl to S3
+        env:
+          S3_MODEL_BUCKET: ${{ vars.S3_MODEL_BUCKET }}
+          S3_MODEL_KEY: ${{ vars.S3_MODEL_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
+          S3_SSE: ${{ vars.S3_SSE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: python package_production_model.py
+
+      - name: Upload packaging artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-packaged-model-and-mlruns
+          path: |
+            outputs/**
+            models/**
+            mlruns/**
           if-no-files-found: warn

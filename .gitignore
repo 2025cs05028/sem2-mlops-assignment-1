@@ -1,5 +1,7 @@
 mlruns/
 models/heart_disease_production_mlflow/
+.pytest_cache/
+.ruff_cache/
 __pycache__/
 *.pyc
 .Python

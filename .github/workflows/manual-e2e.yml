@@ -231,7 +231,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run packaging stage
+      - name: Run packaging stage (optional S3 — vars + secrets)
+        env:
+          # Repository **Variables** (Settings → Secrets and variables → Actions → Variables)
+          S3_MODEL_BUCKET: ${{ vars.S3_MODEL_BUCKET }}
+          S3_MODEL_KEY: ${{ vars.S3_MODEL_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
+          S3_SSE: ${{ vars.S3_SSE }}
+          # Repository **Secrets** (same page → Secrets) — never commit these
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: python package_production_model.py
 
       - name: Upload final artifacts
