@@ -21,12 +21,14 @@ from __future__ import annotations
 import io
 import os
 import pickle
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import pandas as pd
 from flask import Flask, jsonify, request
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from heart_preprocessing import FEATURE_COLS
 
@@ -35,6 +37,16 @@ MODEL_PATH = ROOT / "models" / "heart_disease_production_mlflow" / "model.pkl"
 
 app = Flask(__name__)
 _model: Any | None = None
+REQUESTS_TOTAL = Counter(
+    "heart_api_requests_total",
+    "Total API requests by endpoint and status.",
+    ("endpoint", "status"),
+)
+REQUEST_LATENCY_SECONDS = Histogram(
+    "heart_api_request_latency_seconds",
+    "API request latency in seconds by endpoint.",
+    ("endpoint",),
+)
 
 
 def _resolve_model_source() -> tuple[str, str]:
@@ -108,9 +120,11 @@ def _payload_to_frame(payload: dict[str, Any]) -> pd.DataFrame:
 
 @app.get("/health")
 def health():
+    start = time.time()
     try:
         _load_model()
         source_type, source_value = _resolve_model_source()
+        REQUESTS_TOTAL.labels("/health", "ok").inc()
         return jsonify(
             {
                 "status": "ok",
@@ -119,14 +133,19 @@ def health():
             }
         )
     except Exception as exc:  # pragma: no cover
+        REQUESTS_TOTAL.labels("/health", "error").inc()
         return jsonify({"status": "error", "message": str(exc)}), 500
+    finally:
+        REQUEST_LATENCY_SECONDS.labels("/health").observe(time.time() - start)
 
 
 @app.post("/predict")
 def predict():
+    start = time.time()
     try:
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
+            REQUESTS_TOTAL.labels("/predict", "bad_request").inc()
             return (
                 jsonify(
                     {
@@ -140,6 +159,7 @@ def predict():
         x = _payload_to_frame(payload)
         pred = int(model.predict(x)[0])
         proba = float(model.predict_proba(x)[:, 1][0])
+        REQUESTS_TOTAL.labels("/predict", "ok").inc()
         return jsonify(
             {
                 "prediction": pred,
@@ -148,9 +168,19 @@ def predict():
             }
         )
     except ValueError as exc:
+        REQUESTS_TOTAL.labels("/predict", "bad_request").inc()
         return jsonify({"error": str(exc), "required_features": FEATURE_COLS}), 400
     except Exception as exc:  # pragma: no cover
+        REQUESTS_TOTAL.labels("/predict", "error").inc()
         return jsonify({"error": f"Prediction failed: {exc}"}), 500
+    finally:
+        REQUEST_LATENCY_SECONDS.labels("/predict").observe(time.time() - start)
+
+
+@app.get("/metrics")
+def metrics():
+    REQUESTS_TOTAL.labels("/metrics", "ok").inc()
+    return app.response_class(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
 
 if __name__ == "__main__":
