@@ -43,8 +43,12 @@ def _run(command: list[str], dry_run: bool, verbose: bool) -> None:
                 print(exc.stderr)
             raise
         if out.stdout.strip():
-            last_line = out.stdout.strip().splitlines()[-1]
-            print(f"  -> {last_line}")
+            lines = out.stdout.strip().splitlines()
+            tail = 40 if len(lines) > 40 else len(lines)
+            if len(lines) > 40:
+                print(f"  ... stdout ({len(lines)} lines), showing last {tail}:")
+            for line in lines[-tail:]:
+                print(f"  | {line}")
     print(f"  -> done in {time.time() - started:.1f}s\n")
 
 

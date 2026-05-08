@@ -8,6 +8,7 @@ Model source options:
     - Local default: models/heart_disease_production_mlflow/model.pkl
     - Explicit local/S3 override: MODEL_PKL
     - S3 env: S3_MODEL_BUCKET (+ optional S3_MODEL_KEY)
+    - Optional files (KEY=value per line): .env in repo root, or /etc/default/heart-api
 
 Test:
     curl http://127.0.0.1:8000/health
@@ -21,6 +22,7 @@ from __future__ import annotations
 import io
 import os
 import pickle
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -34,6 +36,31 @@ from heart_preprocessing import FEATURE_COLS
 
 ROOT = Path(__file__).resolve().parent
 MODEL_PATH = ROOT / "models" / "heart_disease_production_mlflow" / "model.pkl"
+
+
+def _load_env_file(path: Path) -> None:
+    """KEY=value lines (optional). Fills only vars that are unset or empty."""
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        if "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip('"').strip("'")
+        if not key:
+            continue
+        if not (os.environ.get(key) or "").strip():
+            os.environ[key] = val
+
+
+_load_env_file(ROOT / ".env")
+_load_env_file(Path("/etc/default/heart-api"))
 
 app = Flask(__name__)
 _model: Any | None = None
@@ -133,6 +160,7 @@ def health():
             }
         )
     except Exception as exc:  # pragma: no cover
+        print(f"[predict_app] /health error: {exc!r}", flush=True)
         REQUESTS_TOTAL.labels("/health", "error").inc()
         return jsonify({"status": "error", "message": str(exc)}), 500
     finally:
@@ -184,4 +212,6 @@ def metrics():
 
 
 if __name__ == "__main__":
+    _t, _src = _resolve_model_source()
+    print(f"[predict_app] MODEL: type={_t}  source={_src}", flush=True)
     app.run(host="0.0.0.0", port=8000, debug=False)

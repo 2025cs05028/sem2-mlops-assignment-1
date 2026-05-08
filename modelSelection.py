@@ -361,6 +361,26 @@ def build_report(
     )
 
 
+def _print_submission_snapshot(cv_df: pd.DataFrame, hold_df: pd.DataFrame, prod_cfg: Path) -> None:
+    bar = "=" * 62
+    print(f"\n{bar}\n  SUBMISSION — key bests (screenshot)\n{bar}")
+    r = cv_df.loc[cv_df["roc_auc_mean"].idxmax()]
+    print(
+        f"  Baseline CV: best mean ROC-AUC → {r['model']!r}  "
+        f"mean={float(r['roc_auc_mean']):.4f}  std={float(r['roc_auc_std']):.4f}"
+    )
+    r = hold_df.loc[hold_df["roc_auc"].idxmax()]
+    print(
+        f"  Tuned holdout: best ROC-AUC → {r['model']!r}  "
+        f"auc={float(r['roc_auc']):.4f}  acc={float(r['accuracy']):.4f}  "
+        f"prec={float(r['precision']):.4f}  rec={float(r['recall']):.4f}"
+    )
+    cfg = json.loads(prod_cfg.read_text(encoding="utf-8"))
+    cp = cfg.get("classifier_params", {})
+    print(f"  Packaged model: LogisticRegression  params={cp}  ({prod_cfg.name})")
+    print(bar + "\n")
+
+
 def main() -> None:
     import mlflow
     from mlflow.models import infer_signature
@@ -476,8 +496,8 @@ def main() -> None:
         hold_df.to_csv(hold_sum, index=False)
         mlflow.log_artifact(str(hold_sum), artifact_path="reports")
 
-        print(report)
-        print(f"\nWrote: {REPORT_PATH}")
+        print(f"Wrote report: {REPORT_PATH} (open file for full markdown)")
+        _print_submission_snapshot(cv_df, hold_df, prod_cfg_path)
 
 
 if __name__ == "__main__":
