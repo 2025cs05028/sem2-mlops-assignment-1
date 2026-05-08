@@ -12,6 +12,7 @@ Model source options:
 
 Test:
     curl http://127.0.0.1:8000/health
+    /predict returns confidence (prob. of predicted class) plus probability_class_0/1.
     curl -X POST http://127.0.0.1:8000/predict \
       -H "Content-Type: application/json" \
       -d '{"age":63,"sex":1,"cp":3,"trestbps":145,"chol":233,"fbs":1,"restecg":0,"thalach":150,"exang":0,"oldpeak":2.3,"slope":0,"ca":0,"thal":"?"}'
@@ -20,6 +21,7 @@ Test:
 from __future__ import annotations
 
 import io
+import math
 import os
 import pickle
 import time
@@ -185,13 +187,23 @@ def predict():
         model = _load_model()
         x = _payload_to_frame(payload)
         pred = int(model.predict(x)[0])
-        proba = float(model.predict_proba(x)[:, 1][0])
+        if hasattr(model, "predict_proba"):
+            proba_row = model.predict_proba(x)[0]
+            p_neg = float(proba_row[0])
+            p_pos = float(proba_row[1])
+        else:
+            s = float(model.decision_function(x)[0])
+            p_pos = 1.0 / (1.0 + math.exp(-s))
+            p_neg = 1.0 - p_pos
+        confidence = p_pos if pred == 1 else p_neg
         REQUESTS_TOTAL.labels("/predict", "ok").inc()
         return jsonify(
             {
                 "prediction": pred,
                 "label": "Heart disease" if pred == 1 else "No heart disease",
-                "confidence": proba,
+                "confidence": confidence,
+                "probability_class_0": p_neg,
+                "probability_class_1": p_pos,
             }
         )
     except ValueError as exc:
